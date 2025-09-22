@@ -1,73 +1,59 @@
-# Welcome to your Lovable project
+# NeuroMatch MVP - Privacy-First Neural Matching
 
-## Project info
+A beautiful React application that connects people based on how they think, not how they look.
 
-**URL**: https://lovable.dev/projects/5b89ec6d-c27a-457b-ab42-c37839bb318e
+## Features
 
-## How can I edit this code?
+- **Privacy-First**: Pseudonym-only matching system
+- **AI-Powered Mindprints**: Unique cognitive fingerprint analysis  
+- **Beautiful Design**: Calm, soulful interface inspired by modern AI apps
+- **Responsive**: Works perfectly on mobile and desktop
+- **Complete MVP**: Full user journey from signup to chat
 
-There are several ways of editing your application.
+## Quick Start
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/5b89ec6d-c27a-457b-ab42-c37839bb318e) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Visit `http://localhost:8080` to see the application.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Project Structure
 
-**Use GitHub Codespaces**
+- `/src/pages/*` - Main application pages (Landing, Quiz, Profile, etc.)
+- `/src/components/*` - Reusable UI components
+- `/src/lib/api.ts` - Mock API layer (replace with real backend)
+- `/src/mock/*.json` - Sample data for development
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Key Components
 
-## What technologies are used for this project?
+- **Button**: Hero, ghost-primary, soft variants using design system
+- **RadarChart**: Mindprint visualization using Recharts  
+- **MatchCard**: Beautiful match display with resonance scores
+- **ChatMessage**: Full chat interface with AI prompts
+- **QuizQuestion**: Multi-format question component
 
-This project is built with:
+## Design System
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Colors and styles are defined in `src/index.css` using HSL semantic tokens:
+- Primary: Purple gradient (#6C5CE7 → #8E7DFF) 
+- Secondary: Soft pink accent (#FFB4C4)
+- Success, muted, and card variants
+- Custom shadows, gradients, and animations
 
-## How can I deploy this project?
+## API Integration
 
-Simply open [Lovable](https://lovable.dev/projects/5b89ec6d-c27a-457b-ab42-c37839bb318e) and click on Share -> Publish.
+Replace mock API in `src/lib/api.ts` with real endpoints:
+- `POST /api/signup` - User registration
+- `POST /api/quiz/submit` - Mindprint analysis
+- `GET /api/matches/:userId` - Find neural matches
+- `POST /api/chat/create` - Start conversations
 
-## Can I connect a custom domain to my Lovable project?
+## What's Next?
 
-Yes, you can!
+- **Refine & Customize**: Tweak the design, animations, and layouts via prompts or visual edits.
+- **Master Prompting**: Use "chat mode" to plan out your project without making edits. Use clear, detailed, and iterative prompts for best results.
+- **Add Backend**: Connect to Supabase for user data, real-time chat, and AI processing.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+This MVP demonstrates the complete NeuroMatch experience with beautiful UI and solid architecture ready for production scaling.

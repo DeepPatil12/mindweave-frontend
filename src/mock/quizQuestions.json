@@ -1,0 +1,20 @@
+[
+  {
+    "id": "q1",
+    "type": "mcq",
+    "text": "When you're stressed, you usually:",
+    "options": ["Overthink everything", "Take immediate action", "Talk it through with others", "Retreat into silence"]
+  },
+  {
+    "id": "q2",
+    "type": "open",
+    "text": "Complete this sentence: 'The world feels...'",
+    "placeholder": "Type a short response..."
+  },
+  {
+    "id": "q3",
+    "type": "mcq", 
+    "text": "Your ideal weekend involves:",
+    "options": ["Deep conversations with close friends", "Exploring somewhere new alone", "Learning something completely new", "Creating something with your hands"]
+  }
+]
