@@ -114,7 +114,6 @@
     --shadow-large: 0 25px 50px -12px hsl(215 28% 7% / 0.6);
   }
 
-@layer base {
   * {
     @apply border-border;
   }
