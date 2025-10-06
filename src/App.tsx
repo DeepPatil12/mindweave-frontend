@@ -6,7 +6,6 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 // Pages
 import Landing from "./pages/Landing";
-import Auth from "./pages/Auth";
 import Signup from "./pages/Signup";
 import Quiz from "./pages/Quiz";
 import Processing from "./pages/Processing";
@@ -27,7 +26,6 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
-          <Route path="/auth" element={<Auth />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/quiz" element={<Quiz />} />
           <Route path="/processing" element={<Processing />} />

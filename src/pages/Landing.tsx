@@ -24,7 +24,7 @@ const Landing: React.FC = () => {
               <a href="#learn-more">Learn More</a>
             </Button>
             <Button variant="hero" size="sm" asChild>
-              <Link to="/auth">Get Started</Link>
+              <Link to="/signup">Get Started</Link>
             </Button>
           </div>
         </div>
@@ -107,7 +107,7 @@ const Landing: React.FC = () => {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Button variant="hero" size="xl" asChild>
-              <Link to="/auth">Start Your Mindprint</Link>
+              <Link to="/signup">Start Your Mindprint</Link>
             </Button>
             <Button variant="ghost-primary" size="xl" asChild>
               <a href="#learn-more">Learn More</a>
