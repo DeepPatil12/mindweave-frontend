@@ -21,30 +21,50 @@ const Auth: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
+    let isMounted = true;
+    
     // Check if user is already logged in
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Check if user has completed signup
-        const { data: profile } = await (supabase as any)
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
         
-        if (profile) {
-          navigate('/profile');
+        if (!isMounted) return;
+        
+        if (session) {
+          // Check if user has completed signup
+          const { data: profile } = await (supabase as any)
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle();
+          
+          if (!isMounted) return;
+          
+          if (profile) {
+            navigate('/profile', { replace: true });
+          } else {
+            navigate('/signup', { replace: true });
+          }
         } else {
-          navigate('/signup');
+          setIsChecking(false);
         }
+      } catch (error) {
+        console.error('Auth check error:', error);
+        if (isMounted) setIsChecking(false);
       }
     };
+    
     checkUser();
-  }, [navigate]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,9 +104,9 @@ const Auth: React.FC = () => {
         });
 
         if (profile) {
-          navigate('/profile');
+          navigate('/profile', { replace: true });
         } else {
-          navigate('/signup');
+          navigate('/signup', { replace: true });
         }
       } else {
         const redirectUrl = `${window.location.origin}/signup`;
@@ -105,6 +125,8 @@ const Auth: React.FC = () => {
           title: "Check your email",
           description: "We sent you a confirmation link. Please check your email to continue."
         });
+        
+        // Don't navigate, user needs to confirm email first
       }
     } catch (error: any) {
       console.error('Auth error:', error);
@@ -117,6 +139,19 @@ const Auth: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  if (isChecking) {
+    return (
+      <Layout showNav={false}>
+        <div className="max-w-md mx-auto py-8 text-center">
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded w-1/2 mx-auto mb-4"></div>
+            <div className="h-4 bg-muted rounded w-3/4 mx-auto"></div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout showNav={false}>

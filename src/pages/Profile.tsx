@@ -18,12 +18,14 @@ const Profile: React.FC = () => {
   const { toast } = useToast();
 
   useEffect(() => {
+    let isMounted = true;
+    
     const loadProfile = async () => {
       try {
         // Get user from localStorage
         const userStr = localStorage.getItem('neuromatch_user');
         if (!userStr) {
-          navigate('/signup');
+          if (isMounted) navigate('/signup', { replace: true });
           return;
         }
 
@@ -31,24 +33,33 @@ const Profile: React.FC = () => {
         
         // Try to get updated profile from API
         const profile = await api.getProfile(localUser.id);
+        if (!isMounted) return;
+        
         if (profile) {
           setUser(profile);
         } else {
           setUser(localUser);
         }
       } catch (error) {
-        toast({
-          variant: "destructive",
-          title: "Failed to load profile",
-          description: "Please try again."
-        });
+        console.error('Profile load error:', error);
+        if (isMounted) {
+          toast({
+            variant: "destructive",
+            title: "Failed to load profile",
+            description: "Please try again."
+          });
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) setIsLoading(false);
       }
     };
 
     loadProfile();
-  }, [navigate, toast]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const getAvatarGradient = (avatarId: string) => {
     const gradients = [

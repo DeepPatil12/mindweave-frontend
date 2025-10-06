@@ -21,34 +21,54 @@ const Signup: React.FC = () => {
   const [username, setUsername] = useState('');
   const [selectedAvatarId, setSelectedAvatarId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isChecking, setIsChecking] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
+    let isMounted = true;
+    
     // Check if user is logged in
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        navigate('/auth');
-        return;
-      }
-      
-      setUserId(session.user.id);
-      
-      // Check if user already has a profile
-      const { data: profile } = await (supabase as any)
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      
-      if (profile) {
-        navigate('/profile');
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!isMounted) return;
+        
+        if (!session) {
+          navigate('/auth', { replace: true });
+          return;
+        }
+        
+        setUserId(session.user.id);
+        
+        // Check if user already has a profile
+        const { data: profile } = await (supabase as any)
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        
+        if (!isMounted) return;
+        
+        if (profile) {
+          navigate('/profile', { replace: true });
+        } else {
+          setIsChecking(false);
+        }
+      } catch (error) {
+        console.error('Profile check error:', error);
+        if (isMounted) setIsChecking(false);
       }
     };
+    
     checkUser();
-  }, [navigate]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const handleGenerateUsername = () => {
     const adjectives = ['Deep', 'Cosmic', 'Quiet', 'Brilliant', 'Gentle', 'Wild', 'Ancient', 'Serene', 'Fierce', 'Mystic'];
@@ -127,7 +147,7 @@ const Signup: React.FC = () => {
         description: `Your pseudonym ${result.data.username} has been created.`
       });
 
-      navigate('/quiz');
+      navigate('/quiz', { replace: true });
     } catch (error: any) {
       console.error('Profile creation error:', error);
       toast({
@@ -139,6 +159,19 @@ const Signup: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  if (isChecking) {
+    return (
+      <Layout showNav={false}>
+        <div className="max-w-2xl mx-auto py-8 text-center">
+          <div className="animate-pulse">
+            <div className="h-8 bg-muted rounded w-1/2 mx-auto mb-4"></div>
+            <div className="h-4 bg-muted rounded w-3/4 mx-auto"></div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout showNav={false}>
