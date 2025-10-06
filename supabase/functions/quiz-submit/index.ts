@@ -33,7 +33,18 @@ serve(async (req) => {
 
     const { answers } = await req.json();
 
-    // Store quiz answers
+    // Delete existing quiz answers for this user (allow retaking quiz)
+    const { error: deleteError } = await supabase
+      .from('quiz_answers')
+      .delete()
+      .eq('user_id', user.id);
+
+    if (deleteError) {
+      console.error('Error deleting old answers:', deleteError);
+      throw deleteError;
+    }
+
+    // Store new quiz answers
     const answerRecords = answers.map((answer: any) => ({
       user_id: user.id,
       question_id: answer.questionId,
@@ -42,7 +53,7 @@ serve(async (req) => {
 
     const { error: insertError } = await supabase
       .from('quiz_answers')
-      .upsert(answerRecords);
+      .insert(answerRecords);
 
     if (insertError) throw insertError;
 
