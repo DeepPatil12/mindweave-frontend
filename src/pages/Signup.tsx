@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,30 +7,77 @@ import { Card } from '@/components/ui/card';
 import { AvatarGrid } from '@/components/Avatar';
 import { Layout } from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
-import { api, mockData } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
+import { mockData } from '@/lib/api';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { z } from 'zod';
+
+const profileSchema = z.object({
+  username: z.string().trim().min(3, 'Username must be at least 3 characters').max(30, 'Username must be less than 30 characters')
+});
 
 const Signup: React.FC = () => {
   const [username, setUsername] = useState('');
   const [selectedAvatarId, setSelectedAvatarId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  useEffect(() => {
+    // Check if user is logged in
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        navigate('/auth');
+        return;
+      }
+      
+      setUserId(session.user.id);
+      
+      // Check if user already has a profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+      
+      if (profile) {
+        navigate('/profile');
+      }
+    };
+    checkUser();
+  }, [navigate]);
+
   const handleGenerateUsername = () => {
-    const generated = api.generateUsername();
-    setUsername(generated);
+    const adjectives = ['Deep', 'Cosmic', 'Quiet', 'Brilliant', 'Gentle', 'Wild', 'Ancient', 'Serene', 'Fierce', 'Mystic'];
+    const nouns = ['Thinker', 'Wanderer', 'Storm', 'River', 'Mountain', 'Ocean', 'Forest', 'Star', 'Moon', 'Phoenix'];
+    const num = Math.floor(Math.random() * 99) + 1;
+    
+    setUsername(`${adjectives[Math.floor(Math.random() * adjectives.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}${num}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!username.trim()) {
+    if (!userId) {
       toast({
         variant: "destructive",
-        title: "Username required",
-        description: "Please enter a username to continue."
+        title: "Authentication required",
+        description: "Please sign in to continue."
+      });
+      navigate('/auth');
+      return;
+    }
+
+    // Validate input
+    const result = profileSchema.safeParse({ username: username.trim() });
+    if (!result.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation error",
+        description: result.error.errors[0].message
       });
       return;
     }
@@ -47,23 +94,46 @@ const Signup: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const user = await api.signup({
-        username: username.trim(),
-        avatarId: selectedAvatarId
-      });
+      // Check if username is already taken
+      const { data: existingProfile } = await supabase
+        .from('profiles')
+        .select('username')
+        .ilike('username', result.data.username)
+        .single();
+
+      if (existingProfile) {
+        toast({
+          variant: "destructive",
+          title: "Username taken",
+          description: "This username is already in use. Please choose another."
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Create profile
+      const { error } = await supabase
+        .from('profiles')
+        .insert({
+          id: userId,
+          username: result.data.username,
+          avatar_id: selectedAvatarId
+        });
+
+      if (error) throw error;
 
       toast({
         title: "Welcome to NeuroMatch!",
-        description: `Your pseudonym ${user.username} has been created.`
+        description: `Your pseudonym ${result.data.username} has been created.`
       });
 
-      // Navigate to quiz
       navigate('/quiz');
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Profile creation error:', error);
       toast({
         variant: "destructive",
-        title: "Signup failed",
-        description: error instanceof Error ? error.message : "Please try again."
+        title: "Profile creation failed",
+        description: error.message || "Please try again."
       });
     } finally {
       setIsLoading(false);
