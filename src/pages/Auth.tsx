@@ -30,8 +30,7 @@ const Auth: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         // Check if user has completed signup
-        // @ts-expect-error - Types will be generated after migration
-        const { data: profile } = await supabase
+        const { data: profile } = await (supabase as any)
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
@@ -73,8 +72,7 @@ const Auth: React.FC = () => {
         if (error) throw error;
 
         // Check if user has completed profile
-        // @ts-expect-error - Types will be generated after migration
-        const { data: profile } = await supabase
+        const { data: profile } = await (supabase as any)
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)

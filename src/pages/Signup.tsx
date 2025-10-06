@@ -37,8 +37,7 @@ const Signup: React.FC = () => {
       setUserId(session.user.id);
       
       // Check if user already has a profile
-      // @ts-expect-error - Types will be generated after migration
-      const { data: profile } = await supabase
+      const { data: profile } = await (supabase as any)
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
@@ -96,8 +95,7 @@ const Signup: React.FC = () => {
 
     try {
       // Check if username is already taken
-      // @ts-expect-error - Types will be generated after migration
-      const { data: existingProfile } = await supabase
+      const { data: existingProfile } = await (supabase as any)
         .from('profiles')
         .select('username')
         .ilike('username', result.data.username)
@@ -114,8 +112,7 @@ const Signup: React.FC = () => {
       }
 
       // Create profile
-      // @ts-expect-error - Types will be generated after migration
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('profiles')
         .insert([{
           id: userId,

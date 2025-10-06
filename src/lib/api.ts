@@ -135,13 +135,10 @@ initializeMockData();
 export const api = {
   // Authentication & Signup (handled by Supabase Auth directly)
   async signup(data: { username: string; avatarId: string }): Promise<User> {
-    // This is now handled in the Signup page directly with Supabase
-    // Keeping this for API compatibility
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) throw new Error('Not authenticated');
     
-    // @ts-expect-error - Types will be generated after running BACKEND_MIGRATION.sql
-    const { data: profile, error } = await supabase
+    const { data: profile, error } = await (supabase as any)
       .from('profiles')
       .select('*')
       .eq('id', authUser.id)
@@ -151,18 +148,12 @@ export const api = {
     if (!profile) throw new Error('Profile not found');
     
     return {
-      // @ts-expect-error - Temporary until types are generated
-      id: profile.id,
-      // @ts-expect-error - Temporary until types are generated
-      username: profile.username || '',
-      // @ts-expect-error - Temporary until types are generated
-      avatarId: profile.avatar_id || '',
-      // @ts-expect-error - Temporary until types are generated
-      bio: profile.bio || undefined,
-      // @ts-expect-error - Temporary until types are generated
-      age: profile.age || undefined,
-      // @ts-expect-error - Temporary until types are generated
-      gender: profile.gender || undefined
+      id: profile.id as string,
+      username: (profile.username as string) || '',
+      avatarId: (profile.avatar_id as string) || '',
+      bio: profile.bio as string | undefined,
+      age: profile.age as number | undefined,
+      gender: profile.gender as string | undefined
     };
   },
 
@@ -189,8 +180,7 @@ export const api = {
   },
 
   async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
-    // @ts-expect-error - Types will be generated after migration
-    const { error } = await supabase
+    const { error } = await (supabase as any)
       .from('profiles')
       .update({
         username: updates.username,
