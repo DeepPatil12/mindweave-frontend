@@ -30,11 +30,12 @@ const Auth: React.FC = () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         // Check if user has completed signup
+        // @ts-expect-error - Types will be generated after migration
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
-          .single();
+          .maybeSingle();
         
         if (profile) {
           navigate('/profile');
@@ -72,11 +73,12 @@ const Auth: React.FC = () => {
         if (error) throw error;
 
         // Check if user has completed profile
+        // @ts-expect-error - Types will be generated after migration
         const { data: profile } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', data.user.id)
-          .single();
+          .maybeSingle();
 
         toast({
           title: "Welcome back!",
