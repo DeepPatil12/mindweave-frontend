@@ -1,1 +1,19 @@
 project_id = "cgdqavnvnzrfmhiuezgb"
+
+[functions.quiz-questions]
+verify_jwt = false
+
+[functions.quiz-submit]
+verify_jwt = true
+
+[functions.get-matches]
+verify_jwt = true
+
+[functions.conversations]
+verify_jwt = true
+
+[functions.messages]
+verify_jwt = true
+
+[functions.me]
+verify_jwt = true

@@ -1,5 +1,5 @@
-// Mock API client for NeuroMatch MVP
-// This provides a complete API interface that can be replaced with real endpoints
+// API client for NeuroMatch - connected to Lovable Cloud backend
+import { supabase } from '@/integrations/supabase/client';
 
 export interface User {
   id: string;
@@ -8,6 +8,10 @@ export interface User {
   tags?: string[];
   radar?: RadarData;
   preferences?: UserPreferences;
+  bio?: string;
+  age?: number;
+  gender?: string;
+  email?: string;
 }
 
 export interface RadarData {
@@ -128,194 +132,116 @@ const initializeMockData = () => {
 initializeMockData();
 
 // API Functions
-
 export const api = {
-  // Authentication & Signup
+  // Authentication & Signup (handled by Supabase Auth directly)
   async signup(data: { username: string; avatarId: string }): Promise<User> {
-    await delay(500);
+    // This is now handled in the Signup page directly with Supabase
+    // Keeping this for API compatibility
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) throw new Error('Not authenticated');
     
-    // Check username uniqueness
-    const existingUser = mockUsers.find(u => u.username.toLowerCase() === data.username.toLowerCase());
-    if (existingUser) {
-      throw new Error('Username already taken');
-    }
-
-    const user: User = {
-      id: generateId(),
-      username: data.username,
-      avatarId: data.avatarId,
-      preferences: {
-        openTo1v1: true,
-        onlyGroupChats: false,
-        dailyPrompts: true
-      }
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authUser.id)
+      .single();
+    
+    if (error) throw error;
+    
+    return {
+      id: profile.id,
+      username: profile.username,
+      avatarId: profile.avatar_id,
+      bio: profile.bio,
+      age: profile.age,
+      gender: profile.gender
     };
-
-    mockUsers.push(user);
-    localStorage.setItem('neuromatch_user', JSON.stringify(user));
-    return user;
   },
 
   // Quiz Management
   async getQuizQuestions(): Promise<QuizQuestion[]> {
-    await delay(300);
-    return [
-      {
-        id: 'q1',
-        type: 'mcq',
-        text: 'When you\'re stressed, you usually:',
-        options: ['Overthink everything', 'Take immediate action', 'Talk it through with others', 'Retreat into silence']
-      },
-      {
-        id: 'q2',
-        type: 'open',
-        text: 'Complete this sentence: "The world feels..."',
-        placeholder: 'Type a short response...'
-      },
-      {
-        id: 'q3',
-        type: 'mcq',
-        text: 'Your ideal weekend involves:',
-        options: ['Deep conversations with close friends', 'Exploring somewhere new alone', 'Learning something completely new', 'Creating something with your hands']
-      },
-      {
-        id: 'q4',
-        type: 'multi-select',
-        text: 'Which of these resonate with you? (Choose all that apply)',
-        options: ['I think in images and metaphors', 'Logic guides most of my decisions', 'I feel others\' emotions deeply', 'I need time alone to recharge', 'I love connecting patterns', 'I trust my gut instincts']
-      },
-      {
-        id: 'q5',
-        type: 'open',
-        text: 'What\'s a question you\'ve been carrying with you lately?',
-        placeholder: 'Share what\'s on your mind...'
-      },
-      {
-        id: 'q6',
-        type: 'mcq',
-        text: 'In a group discussion, you typically:',
-        options: ['Listen carefully before speaking', 'Jump in with ideas immediately', 'Ask clarifying questions', 'Help others feel heard']
-      },
-      {
-        id: 'q7',
-        type: 'mcq',
-        text: 'Change excites you most when it\'s:',
-        options: ['Gradual and thoughtful', 'Bold and transformative', 'Collaborative and inclusive', 'Unexpected and spontaneous']
-      },
-      {
-        id: 'q8',
-        type: 'open',
-        text: 'Describe a moment when you felt most like yourself.',
-        placeholder: 'What was happening? How did it feel?'
-      }
-    ];
+    const { data, error } = await supabase.functions.invoke('quiz-questions');
+    if (error) throw error;
+    return data;
   },
 
   async submitQuiz(userId: string, answers: QuizAnswer[]): Promise<{ profileId: string }> {
-    await delay(2000); // Longer delay to simulate AI processing
-    
-    mockQuizAnswers.set(userId, answers);
-    
-    // Generate mock radar data and tags based on answers
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) {
-      // Simple algorithm to generate radar data from answers
-      user.radar = {
-        curiosity: Math.random() * 0.4 + 0.6, // 0.6-1.0 range
-        empathy: Math.random() * 0.4 + 0.5,
-        logic: Math.random() * 0.4 + 0.4,
-        novelty: Math.random() * 0.4 + 0.5,
-        reflection: Math.random() * 0.4 + 0.6
-      };
-      
-      user.tags = ['Thoughtful', 'Empathic', 'Creative', 'Curious'].slice(0, Math.floor(Math.random() * 3) + 3);
-      
-      localStorage.setItem('neuromatch_user', JSON.stringify(user));
-    }
-
-    return { profileId: userId };
+    const { data, error } = await supabase.functions.invoke('quiz-submit', {
+      body: { answers }
+    });
+    if (error) throw error;
+    return data;
   },
 
   // Profile Management
   async getProfile(userId: string): Promise<User | null> {
-    await delay(400);
-    const user = mockUsers.find(u => u.id === userId) || JSON.parse(localStorage.getItem('neuromatch_user') || 'null');
-    return user;
+    const { data, error } = await supabase.functions.invoke('me');
+    if (error) throw error;
+    return data;
   },
 
   async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
-    await delay(500);
-    const userIndex = mockUsers.findIndex(u => u.id === userId);
-    if (userIndex >= 0) {
-      mockUsers[userIndex] = { ...mockUsers[userIndex], ...updates };
-      localStorage.setItem('neuromatch_user', JSON.stringify(mockUsers[userIndex]));
-      return mockUsers[userIndex];
-    }
-    throw new Error('User not found');
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        username: updates.username,
+        bio: updates.bio,
+        age: updates.age,
+        gender: updates.gender
+      })
+      .eq('id', userId);
+    
+    if (error) throw error;
+    
+    return this.getProfile(userId) as Promise<User>;
   },
 
   // Matches
   async getMatches(userId: string): Promise<Match[]> {
-    await delay(600);
-    return mockMatches;
+    const { data, error } = await supabase.functions.invoke('get-matches');
+    if (error) throw error;
+    return data || [];
   },
 
   // Chat Management
   async createChat(participants: string[]): Promise<{ chatId: string }> {
-    await delay(400);
-    const chatId = `chat_${generateId()}`;
-    
-    const newChat: Chat = {
-      id: chatId,
-      participants,
-      type: participants.length === 2 ? '1v1' : 'group',
-      messages: []
-    };
-    
-    mockChats.push(newChat);
-    return { chatId };
+    const { data, error } = await supabase.functions.invoke('conversations', {
+      body: { participants }
+    });
+    if (error) throw error;
+    return data;
   },
 
   async getChatMessages(chatId: string): Promise<ChatMessage[]> {
-    await delay(300);
-    const chat = mockChats.find(c => c.id === chatId);
-    return chat?.messages || [];
+    const { data, error } = await supabase.functions.invoke('messages', {
+      body: { conversationId: chatId }
+    });
+    if (error) throw error;
+    return data || [];
   },
 
   async sendMessage(chatId: string, from: string, text: string): Promise<{ messageId: string }> {
-    await delay(200);
-    const messageId = generateId();
-    
-    const chat = mockChats.find(c => c.id === chatId);
-    if (chat) {
-      const message: ChatMessage = {
-        id: messageId,
-        from,
+    const { data, error } = await supabase.functions.invoke('messages', {
+      body: { 
+        conversationId: chatId,
         text,
-        timestamp: new Date().toISOString(),
         type: 'user'
-      };
-      chat.messages.push(message);
-    }
-    
-    return { messageId };
+      }
+    });
+    if (error) throw error;
+    return data;
   },
 
   // Daily Micro-Test
   async submitDailyTest(userId: string, answer: string): Promise<{ updatedRadar: RadarData }> {
-    await delay(500);
-    
-    const user = mockUsers.find(u => u.id === userId);
-    if (user && user.radar) {
-      // Slightly adjust radar based on daily test
-      const adjustment = answer === 'novelty' ? 0.02 : -0.01;
-      user.radar.novelty = Math.min(1, Math.max(0, user.radar.novelty + adjustment));
-      
-      localStorage.setItem('neuromatch_user', JSON.stringify(user));
-      return { updatedRadar: user.radar };
+    // Get current profile
+    const profile = await this.getProfile(userId);
+    if (!profile || !profile.radar) {
+      throw new Error('User profile not found');
     }
     
-    throw new Error('User not found');
+    // Mock update - in production this would recalculate personality
+    return { updatedRadar: profile.radar };
   },
 
   // Utility functions
