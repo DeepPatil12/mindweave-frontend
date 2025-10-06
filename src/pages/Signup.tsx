@@ -21,20 +21,16 @@ const Signup: React.FC = () => {
   const [username, setUsername] = useState('');
   const [selectedAvatarId, setSelectedAvatarId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    let isMounted = true;
-    
-    // Check if user is logged in
-    const checkUser = async () => {
+    // Check ONCE on mount for auth and profile
+    const checkAuthAndProfile = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        
-        if (!isMounted) return;
         
         if (!session) {
           navigate('/auth', { replace: true });
@@ -43,32 +39,28 @@ const Signup: React.FC = () => {
         
         setUserId(session.user.id);
         
-        // Check if user already has a profile
+        // Check if profile already exists
         const { data: profile } = await (supabase as any)
           .from('profiles')
-          .select('*')
+          .select('username')
           .eq('id', session.user.id)
           .maybeSingle();
         
-        if (!isMounted) return;
-        
         if (profile) {
           navigate('/profile', { replace: true });
-        } else {
-          setIsChecking(false);
+          return;
         }
       } catch (error) {
-        console.error('Profile check error:', error);
-        if (isMounted) setIsChecking(false);
+        console.error('Auth check failed:', error);
+        navigate('/auth', { replace: true });
+        return;
+      } finally {
+        setIsCheckingAuth(false);
       }
     };
     
-    checkUser();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    checkAuthAndProfile();
+  }, []); // Empty deps - run ONCE
 
   const handleGenerateUsername = () => {
     const adjectives = ['Deep', 'Cosmic', 'Quiet', 'Brilliant', 'Gentle', 'Wild', 'Ancient', 'Serene', 'Fierce', 'Mystic'];
@@ -84,14 +76,13 @@ const Signup: React.FC = () => {
     if (!userId) {
       toast({
         variant: "destructive",
-        title: "Authentication required",
-        description: "Please sign in to continue."
+        title: "Session expired",
+        description: "Please sign in again."
       });
-      navigate('/auth');
+      navigate('/auth', { replace: true });
       return;
     }
 
-    // Validate input
     const result = profileSchema.safeParse({ username: username.trim() });
     if (!result.success) {
       toast({
@@ -114,7 +105,7 @@ const Signup: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Check if username is already taken
+      // Check username availability
       const { data: existingProfile } = await (supabase as any)
         .from('profiles')
         .select('username')
@@ -134,11 +125,11 @@ const Signup: React.FC = () => {
       // Create profile
       const { error } = await (supabase as any)
         .from('profiles')
-        .insert([{
+        .insert({
           id: userId,
           username: result.data.username,
           avatar_id: selectedAvatarId
-        }]);
+        });
 
       if (error) throw error;
 
@@ -155,18 +146,17 @@ const Signup: React.FC = () => {
         title: "Profile creation failed",
         description: error.message || "Please try again."
       });
-    } finally {
       setIsLoading(false);
     }
   };
 
-  if (isChecking) {
+  if (isCheckingAuth) {
     return (
       <Layout showNav={false}>
-        <div className="max-w-2xl mx-auto py-8 text-center">
+        <div className="max-w-2xl mx-auto py-16 text-center">
           <div className="animate-pulse">
-            <div className="h-8 bg-muted rounded w-1/2 mx-auto mb-4"></div>
-            <div className="h-4 bg-muted rounded w-3/4 mx-auto"></div>
+            <div className="h-8 bg-muted rounded w-48 mx-auto mb-4"></div>
+            <div className="h-4 bg-muted rounded w-64 mx-auto"></div>
           </div>
         </div>
       </Layout>
@@ -176,7 +166,6 @@ const Signup: React.FC = () => {
   return (
     <Layout showNav={false}>
       <div className="max-w-2xl mx-auto py-8">
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -201,7 +190,6 @@ const Signup: React.FC = () => {
           </p>
         </motion.div>
 
-        {/* Signup Form */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -209,7 +197,6 @@ const Signup: React.FC = () => {
         >
           <Card className="card-elevated p-8">
             <form onSubmit={handleSubmit} className="space-y-8">
-              {/* Username Section */}
               <div className="space-y-4">
                 <Label htmlFor="username" className="text-lg font-semibold">
                   Choose Your Pseudonym
@@ -247,7 +234,6 @@ const Signup: React.FC = () => {
                 )}
               </div>
 
-              {/* Avatar Section */}
               <div className="space-y-4">
                 <Label className="text-lg font-semibold">
                   Select Your Avatar
@@ -264,7 +250,6 @@ const Signup: React.FC = () => {
                 />
               </div>
 
-              {/* Submit Button */}
               <div className="pt-4">
                 <Button
                   type="submit"
@@ -280,7 +265,6 @@ const Signup: React.FC = () => {
           </Card>
         </motion.div>
 
-        {/* Privacy Note */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
