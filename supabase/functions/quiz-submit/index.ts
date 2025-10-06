@@ -53,7 +53,7 @@ serve(async (req) => {
       .eq('id', user.id)
       .single();
 
-    // Create text for embedding generation
+    // Create text for semantic analysis
     const answerTexts = answers
       .filter((a: any) => typeof a.value === 'string')
       .map((a: any) => a.value)
@@ -61,52 +61,30 @@ serve(async (req) => {
     const bioText = profile?.bio || '';
     const combinedText = `${bioText} ${answerTexts}`.trim();
 
-    // Generate embedding using Lovable AI
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY not configured');
 
-    console.log('Generating embedding for user:', user.id);
-    
-    const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: combinedText,
-        model: 'text-embedding-3-small' // OpenAI embedding model
-      }),
-    });
+    console.log('Generating OCEAN personality scores and semantic summary for user:', user.id);
 
-    if (!embeddingResponse.ok) {
-      const errorText = await embeddingResponse.text();
-      console.error('Embedding API error:', errorText);
-      throw new Error(`Embedding generation failed: ${errorText}`);
-    }
-
-    const embeddingData = await embeddingResponse.json();
-    const embedding = embeddingData.data[0].embedding;
-
-    // Store embedding
-    await supabase
-      .from('user_embeddings')
-      .upsert({
-        user_id: user.id,
-        embedding_vector: JSON.stringify(embedding)
-      });
-
-    console.log('Generating OCEAN personality scores for user:', user.id);
-
-    // Generate OCEAN personality using Lovable AI
-    const oceanPrompt = `Analyze the following user responses and bio to generate OCEAN (Big Five) personality scores. Return ONLY a JSON object with scores between 0 and 1 for: openness, conscientiousness, extraversion, agreeableness, neuroticism.
+    // Generate OCEAN personality and semantic summary using Lovable AI
+    const analysisPrompt = `Analyze the following user responses and bio to generate:
+1. OCEAN (Big Five) personality scores (0-1 scale)
+2. A semantic summary capturing their personality essence (max 500 chars)
 
 Bio: ${bioText}
 Responses: ${answerTexts}
 
-Return format: {"openness": 0.0-1.0, "conscientiousness": 0.0-1.0, "extraversion": 0.0-1.0, "agreeableness": 0.0-1.0, "neuroticism": 0.0-1.0}`;
+Return ONLY valid JSON in this exact format:
+{
+  "openness": 0.0-1.0,
+  "conscientiousness": 0.0-1.0,
+  "extraversion": 0.0-1.0,
+  "agreeableness": 0.0-1.0,
+  "neuroticism": 0.0-1.0,
+  "summary": "semantic summary text"
+}`;
 
-    const oceanResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
@@ -116,23 +94,32 @@ Return format: {"openness": 0.0-1.0, "conscientiousness": 0.0-1.0, "extraversion
         model: 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: 'You are a personality analysis expert. Always respond with valid JSON only.' },
-          { role: 'user', content: oceanPrompt }
+          { role: 'user', content: analysisPrompt }
         ],
         temperature: 0.3
       }),
     });
 
-    if (!oceanResponse.ok) {
-      const errorText = await oceanResponse.text();
-      console.error('OCEAN API error:', errorText);
-      throw new Error(`OCEAN generation failed: ${errorText}`);
+    if (!analysisResponse.ok) {
+      const errorText = await analysisResponse.text();
+      console.error('Analysis API error:', errorText);
+      throw new Error(`Personality analysis failed: ${errorText}`);
     }
 
-    const oceanData = await oceanResponse.json();
-    const oceanScoresText = oceanData.choices[0].message.content;
+    const analysisData = await analysisResponse.json();
+    const analysisText = analysisData.choices[0].message.content;
     
     // Parse JSON from response
-    const oceanScores = JSON.parse(oceanScoresText.replace(/```json\n?|\n?```/g, '').trim());
+    const analysis = JSON.parse(analysisText.replace(/```json\n?|\n?```/g, '').trim());
+    const { summary, ...oceanScores } = analysis;
+
+    // Store semantic summary as embedding replacement
+    await supabase
+      .from('user_embeddings')
+      .upsert({
+        user_id: user.id,
+        embedding_vector: summary // Store semantic summary instead of vector
+      });
 
     // Store OCEAN scores
     await supabase
@@ -144,29 +131,43 @@ Return format: {"openness": 0.0-1.0, "conscientiousness": 0.0-1.0, "extraversion
 
     console.log('Computing matches for user:', user.id);
 
-    // Find matches by comparing embeddings
-    const { data: otherUsers, error: usersError } = await supabase
-      .from('user_embeddings')
-      .select('user_id, embedding_vector')
+    // Find matches by comparing OCEAN personality scores
+    const { data: otherPersonalities, error: personalitiesError } = await supabase
+      .from('personalities')
+      .select('user_id, openness, conscientiousness, extraversion, agreeableness, neuroticism')
       .neq('user_id', user.id);
 
-    if (usersError) throw usersError;
+    if (personalitiesError) throw personalitiesError;
 
-    const userEmbedding = embedding;
+    const userScores = [
+      oceanScores.openness,
+      oceanScores.conscientiousness,
+      oceanScores.extraversion,
+      oceanScores.agreeableness,
+      oceanScores.neuroticism
+    ];
+
     const matches = [];
 
-    for (const other of otherUsers || []) {
-      const otherEmbedding = JSON.parse(other.embedding_vector);
+    for (const other of otherPersonalities || []) {
+      const otherScores = [
+        other.openness,
+        other.conscientiousness,
+        other.extraversion,
+        other.agreeableness,
+        other.neuroticism
+      ];
       
-      // Calculate cosine similarity
-      const dotProduct = userEmbedding.reduce((sum: number, val: number, i: number) => 
-        sum + val * otherEmbedding[i], 0);
-      const magA = Math.sqrt(userEmbedding.reduce((sum: number, val: number) => sum + val * val, 0));
-      const magB = Math.sqrt(otherEmbedding.reduce((sum: number, val: number) => sum + val * val, 0));
-      const similarity = dotProduct / (magA * magB);
+      // Calculate Euclidean distance and convert to similarity score
+      let sumSquaredDiff = 0;
+      for (let i = 0; i < userScores.length; i++) {
+        sumSquaredDiff += Math.pow(userScores[i] - otherScores[i], 2);
+      }
+      const distance = Math.sqrt(sumSquaredDiff);
       
-      // Convert to 0-100 score
-      const matchScore = ((similarity + 1) / 2) * 100;
+      // Convert distance to 0-100 similarity score (closer = higher score)
+      // Max possible distance is sqrt(5) ≈ 2.236 for normalized 0-1 scores
+      const matchScore = Math.max(0, Math.min(100, (1 - distance / 2.236) * 100));
       
       matches.push({
         user1_id: user.id < other.user_id ? user.id : other.user_id,
@@ -175,10 +176,10 @@ Return format: {"openness": 0.0-1.0, "conscientiousness": 0.0-1.0, "extraversion
       });
     }
 
-    // Store top 5 matches
+    // Store top 10 matches
     const topMatches = matches
       .sort((a, b) => b.match_score - a.match_score)
-      .slice(0, 5);
+      .slice(0, 10);
 
     if (topMatches.length > 0) {
       await supabase

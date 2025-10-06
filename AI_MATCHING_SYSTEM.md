@@ -2,7 +2,7 @@
 
 ## Overview
 
-NeuroMatch uses advanced AI techniques to match users based on their cognitive patterns and personality traits, not superficial characteristics. The system combines **semantic embeddings** and **OCEAN personality analysis** to find truly compatible connections.
+NeuroMatch uses advanced AI techniques to match users based on their cognitive patterns and personality traits, not superficial characteristics. The system uses **OCEAN personality analysis** with **semantic summaries** to find truly compatible connections.
 
 ---
 
@@ -17,44 +17,28 @@ User Answers Quiz
       ↓
 Edge Function: quiz-submit
       ↓
-Generate Embedding → Generate OCEAN Scores → Calculate Matches
+Generate OCEAN Scores + Semantic Summary (single AI call)
+      ↓
+Calculate Matches Based on OCEAN Distance
       ↓
 Store in Database
 ```
 
-### 2. Embedding Generation
+### 2. Semantic Summary Generation
 
-**What are embeddings?**
-Embeddings are numerical representations (vectors) that capture the semantic meaning of text. Similar thoughts produce similar vectors.
+**What are semantic summaries?**
+Instead of embeddings, we use AI to generate a concise text summary that captures the essence of a user's personality. This is more flexible and human-readable than vector embeddings.
 
 **Process:**
 1. User's bio + quiz answers are combined into a single text
-2. Sent to Lovable AI Gateway using `text-embedding-3-small` model
-3. Returns a 1536-dimensional vector
-4. Stored in `user_embeddings` table
+2. Sent to Lovable AI Gateway using `google/gemini-2.5-flash` model
+3. Returns both OCEAN scores AND a semantic summary in one call
+4. Summary stored in `user_embeddings` table (as text, not vector)
 
-**Example:**
-```typescript
-const textForEmbedding = `
-  Bio: ${userBio}
-  
-  Quiz Answers:
-  Q: When you're stressed, you usually:
-  A: Overthink everything
-  
-  Q: Complete this sentence: "The world feels..."
-  A: Like an interconnected web of stories waiting to be understood
-`;
-
-// Lovable AI generates embedding
-const embedding = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-  method: 'POST',
-  body: JSON.stringify({
-    model: 'text-embedding-3-small',
-    input: textForEmbedding
-  })
-});
-```
+**Why not traditional embeddings?**
+- Lovable AI Gateway doesn't support dedicated embedding models like `text-embedding-3-small`
+- Semantic summaries are more interpretable and can be used for match explanations
+- Single AI call for both OCEAN + summary is more efficient and cost-effective
 
 ### 3. OCEAN Personality Analysis
 
@@ -67,83 +51,73 @@ OCEAN (Big Five) is a scientifically validated personality framework:
 - **N**euroticism: Emotional stability, anxiety, moodiness
 
 **Process:**
-1. User's quiz answers are sent to Lovable AI Gateway
-2. Google's Gemini 2.5 Flash analyzes responses using structured output
-3. Returns scores (0.0 - 1.0) for each trait
-4. Stored in `personalities` table
+1. User's quiz answers + bio sent to Lovable AI Gateway in single call
+2. Google's Gemini 2.5 Flash analyzes responses 
+3. Returns JSON with OCEAN scores (0.0 - 1.0) AND semantic summary
+4. OCEAN scores stored in `personalities` table
+5. Semantic summary stored in `user_embeddings` table
 
 **AI Prompt Used:**
 ```typescript
-const systemPrompt = `You are a personality analysis expert. Analyze the user's quiz responses and generate OCEAN (Big Five) personality scores.
+const analysisPrompt = `Analyze the following user responses and bio to generate:
+1. OCEAN (Big Five) personality scores (0-1 scale)
+2. A semantic summary capturing their personality essence (max 500 chars)
 
-Return scores between 0.0 and 1.0 for:
-- Openness: Curiosity, creativity, intellectual interests
-- Conscientiousness: Organization, responsibility, goal-directed
-- Extraversion: Sociability, assertiveness, energy in social settings
-- Agreeableness: Compassion, cooperation, trust in others
-- Neuroticism: Emotional instability, anxiety, stress response
+Bio: ${bioText}
+Responses: ${answerTexts}
 
-Base your analysis on the actual responses, considering both explicit answers and implicit patterns.`;
-```
-
-**Structured Output Schema:**
-```typescript
+Return ONLY valid JSON in this exact format:
 {
-  tools: [{
-    type: "function",
-    function: {
-      name: "analyze_personality",
-      parameters: {
-        type: "object",
-        properties: {
-          openness: { type: "number", minimum: 0, maximum: 1 },
-          conscientiousness: { type: "number", minimum: 0, maximum: 1 },
-          extraversion: { type: "number", minimum: 0, maximum: 1 },
-          agreeableness: { type: "number", minimum: 0, maximum: 1 },
-          neuroticism: { type: "number", minimum: 0, maximum: 1 }
-        }
-      }
-    }
-  }],
-  tool_choice: { type: "function", function: { name: "analyze_personality" } }
-}
+  "openness": 0.0-1.0,
+  "conscientiousness": 0.0-1.0,
+  "extraversion": 0.0-1.0,
+  "agreeableness": 0.0-1.0,
+  "neuroticism": 0.0-1.0,
+  "summary": "semantic summary text"
+}`;
 ```
+
+**Why Single AI Call?**
+- More efficient: One API call instead of two
+- Lower cost: Reduced API usage
+- Consistency: Summary and scores generated from same analysis
+- Lovable AI Gateway limitation: No dedicated embedding endpoint
 
 ### 4. Match Calculation
 
 **Algorithm:**
-The system finds compatible users using **cosine similarity** between embeddings:
+The system finds compatible users using **Euclidean distance** on OCEAN personality scores:
 
 ```typescript
-function cosineSimilarity(vec1: number[], vec2: number[]): number {
-  let dotProduct = 0;
-  let mag1 = 0;
-  let mag2 = 0;
-  
-  for (let i = 0; i < vec1.length; i++) {
-    dotProduct += vec1[i] * vec2[i];
-    mag1 += vec1[i] * vec1[i];
-    mag2 += vec2[i] * vec2[i];
-  }
-  
-  return dotProduct / (Math.sqrt(mag1) * Math.sqrt(mag2));
-}
+// Get OCEAN scores for both users
+const userScores = [openness, conscientiousness, extraversion, agreeableness, neuroticism];
+const otherScores = [O2, C2, E2, A2, N2];
 
-// Convert to percentage score
-const matchScore = cosineSimilarity(userEmbedding, otherUserEmbedding) * 100;
+// Calculate Euclidean distance in 5-dimensional space
+let sumSquaredDiff = 0;
+for (let i = 0; i < 5; i++) {
+  sumSquaredDiff += Math.pow(userScores[i] - otherScores[i], 2);
+}
+const distance = Math.sqrt(sumSquaredDiff);
+
+// Convert distance to 0-100 similarity score
+// Max possible distance is sqrt(5) ≈ 2.236 for normalized 0-1 scores
+const matchScore = Math.max(0, Math.min(100, (1 - distance / 2.236) * 100));
 ```
 
-**Why Cosine Similarity?**
-- Measures the angle between vectors (not just distance)
-- Values range from -1 to 1 (we scale to 0-100%)
-- Captures semantic similarity effectively
-- Used by major search engines and recommendation systems
+**Why Euclidean Distance?**
+- Intuitive: Measures "personality distance" in 5-dimensional OCEAN space
+- Smaller distance = more similar personalities = higher compatibility
+- All dimensions weighted equally (can be customized for weighted matching)
+- Fast computation: O(5) per comparison
+- Scientifically grounded in personality psychology
 
 **Match Selection:**
-1. Calculate similarity with ALL other users
-2. Sort by score (highest first)
-3. Store top 5 matches in `matches` table
-4. Includes both embedding similarity AND OCEAN compatibility
+1. Calculate distance with ALL other users who completed the quiz
+2. Convert to 0-100 compatibility score
+3. Sort by score (highest first)
+4. Store top 10 matches in `matches` table
+5. Bidirectional storage prevents duplicates
 
 ---
 
@@ -153,10 +127,12 @@ const matchScore = cosineSimilarity(userEmbedding, otherUserEmbedding) * 100;
 ```sql
 CREATE TABLE user_embeddings (
   user_id UUID PRIMARY KEY REFERENCES profiles(id),
-  embedding_vector TEXT NOT NULL,  -- JSON array of 1536 floats
+  embedding_vector TEXT NOT NULL,  -- Semantic summary text (not vector!)
   generated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
+
+**Note:** Despite the table name, we now store semantic text summaries instead of numerical embedding vectors, since Lovable AI Gateway doesn't support dedicated embedding models.
 
 ### personalities
 ```sql
@@ -193,14 +169,14 @@ CREATE TABLE matches (
 **Responsibilities:**
 1. Authenticate user
 2. Store quiz answers in `quiz_answers` table
-3. Generate embedding via Lovable AI
-4. Generate OCEAN scores via Lovable AI  
-5. Calculate matches with all other users
-6. Store top 5 matches
+3. Generate OCEAN scores + semantic summary via Lovable AI (single call)
+4. Store semantic summary in `user_embeddings` table
+5. Store OCEAN scores in `personalities` table
+6. Calculate matches with all other users based on OCEAN distance
+7. Store top 10 matches
 
 **Key API Calls:**
-- `https://ai.gateway.lovable.dev/v1/embeddings` - Text embedding
-- `https://ai.gateway.lovable.dev/v1/chat/completions` - OCEAN analysis
+- `https://ai.gateway.lovable.dev/v1/chat/completions` - Combined OCEAN + summary analysis
 
 **Environment Variables:**
 - `LOVABLE_API_KEY` - Auto-provisioned by Lovable Cloud
@@ -218,17 +194,18 @@ CREATE TABLE matches (
 
 ## AI Models Used
 
-### Text Embedding: `text-embedding-3-small`
-- **Provider:** OpenAI (via Lovable AI Gateway)
-- **Dimensions:** 1536
-- **Use Case:** Converting text to semantic vectors
-- **Cost:** ~$0.02 per 1M tokens
-
-### Personality Analysis: `google/gemini-2.5-flash`
+### Personality Analysis + Semantic Summary: `google/gemini-2.5-flash`
 - **Provider:** Google (via Lovable AI Gateway)
-- **Use Case:** OCEAN personality scoring with structured output
-- **Strengths:** Fast, cost-effective, excellent reasoning
+- **Use Case:** Combined OCEAN personality scoring + semantic summary generation
+- **Strengths:** Fast, cost-effective, excellent reasoning, JSON output
+- **Output:** OCEAN scores (5 floats) + personality summary text (up to 500 chars)
 - **Cost:** FREE during promotional period (Sept 29 - Oct 13, 2025)
+
+### Why No Embedding Model?
+- Lovable AI Gateway doesn't support dedicated embedding models
+- Available models: GPT-5 family, Gemini 2.5 family (chat completions only)
+- Semantic text summaries are more flexible than embedding vectors
+- Can be used for match explanations and future AI features
 
 ---
 
@@ -263,9 +240,9 @@ CREATE POLICY "Users can view their matches"
 # Complete quiz with varied answers
 ```
 
-### 2. Check Embeddings
+### 2. Check Semantic Summaries
 ```sql
-SELECT user_id, generated_at
+SELECT user_id, embedding_vector as semantic_summary, generated_at
 FROM user_embeddings;
 ```
 
@@ -293,37 +270,39 @@ ORDER BY m.match_score DESC;
 ## Performance Considerations
 
 ### Optimization Strategies:
-1. **Batch Embeddings:** Process multiple users at once
-2. **Caching:** Store frequently accessed embeddings in memory
-3. **Indexing:** Use `GIN` indexes for JSONB columns
-4. **Async Processing:** Run matching in background jobs
+1. **Batch Analysis:** Process multiple users in parallel
+2. **Caching:** Cache OCEAN scores for inactive users
+3. **Incremental Matching:** Only recalculate matches for new users
+4. **Indexing:** Index personalities table for faster lookups
 5. **Pagination:** Limit matches returned per request
 
 ### Current Limits:
-- Max embedding dimension: 1536
-- Match calculation: O(n) for n users
+- OCEAN dimensions: 5 (very fast computation)
+- Match calculation: O(n) for n users - scales to ~50k users easily
 - API rate limits: See Lovable AI docs
+- Semantic summary: Max 500 characters
 
 ---
 
 ## Future Enhancements
 
 🔮 **Planned Features:**
-- [ ] Weighted OCEAN scoring in matching
-- [ ] Dynamic match recalculation
-- [ ] Compatibility explanations
+- [ ] Weighted OCEAN scoring (prioritize certain traits)
+- [ ] Semantic summary comparison for tie-breaking
+- [ ] AI-generated compatibility explanations using summaries
+- [ ] Dynamic match recalculation based on engagement
 - [ ] Temporal matching (mood-based)
 - [ ] Group compatibility analysis
-- [ ] Visual similarity mapping
+- [ ] Match explanation feature: "Why you matched"
 
 ---
 
 ## References
 
 - [Lovable AI Documentation](https://docs.lovable.dev/features/ai)
-- [OpenAI Embeddings Guide](https://platform.openai.com/docs/guides/embeddings)
 - [Big Five Personality Traits](https://en.wikipedia.org/wiki/Big_Five_personality_traits)
-- [Cosine Similarity Explained](https://en.wikipedia.org/wiki/Cosine_similarity)
+- [Euclidean Distance](https://en.wikipedia.org/wiki/Euclidean_distance)
+- [Google Gemini Models](https://ai.google.dev/models/gemini)
 
 ---
 

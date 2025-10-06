@@ -121,15 +121,9 @@ neuromatch/
 
 ## 🤖 How AI Matching Works
 
-NeuroMatch uses two complementary AI techniques:
+NeuroMatch uses AI-powered personality analysis for intelligent matching:
 
-### 1. **Semantic Embeddings**
-- User's bio + quiz answers → AI generates 1536-dimensional vector
-- Represents the "meaning" of their thoughts
-- Similar vectors = similar thinking patterns
-- Uses OpenAI's `text-embedding-3-small` via Lovable AI Gateway
-
-### 2. **OCEAN Personality Scores**
+### 1. **OCEAN Personality Analysis**
 - AI analyzes quiz responses for Big Five traits:
   - **O**penness: Curiosity, creativity
   - **C**onscientiousness: Organization, discipline
@@ -137,11 +131,18 @@ NeuroMatch uses two complementary AI techniques:
   - **A**greeableness: Compassion, cooperation
   - **N**euroticism: Emotional stability
 - Uses Google's `gemini-2.5-flash` via Lovable AI Gateway
-- Structured output ensures valid scores (0.0 - 1.0)
+- Returns scores (0.0 - 1.0) + semantic personality summary
+
+### 2. **Semantic Summary**
+- AI generates concise text summary of user's personality essence
+- More flexible than numerical embeddings
+- Can be used for match explanations
+- Stored alongside OCEAN scores
 
 ### 3. **Match Calculation**
-- Cosine similarity between embeddings
-- Finds top 5 most compatible users
+- Euclidean distance between OCEAN scores in 5D personality space
+- Smaller distance = more compatible personalities
+- Finds top 10 most compatible users
 - Stored in `matches` table with score (0-100%)
 
 **For detailed information, see [AI_MATCHING_SYSTEM.md](./AI_MATCHING_SYSTEM.md)**
@@ -167,8 +168,7 @@ NeuroMatch uses two complementary AI techniques:
 - **Row-Level Security (RLS)** - Database-level authorization
 
 ### AI Models
-- `text-embedding-3-small` - Semantic embeddings (1536-dim)
-- `google/gemini-2.5-flash` - OCEAN personality analysis
+- `google/gemini-2.5-flash` - OCEAN personality analysis + semantic summaries
 
 ---
 
@@ -265,7 +265,7 @@ answer_value JSONB
 **user_embeddings**
 ```sql
 user_id UUID PRIMARY KEY → profiles(id)
-embedding_vector TEXT (JSON array of 1536 floats)
+embedding_vector TEXT (semantic summary text, not vector)
 ```
 
 **personalities**
