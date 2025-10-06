@@ -6,7 +6,6 @@ import { QuizQuestionComponent, QuizProgress } from '@/components/QuizQuestion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { api, type QuizQuestion, type QuizAnswer } from '@/lib/api';
-import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, ArrowRight, SkipForward, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -76,17 +75,19 @@ const Quiz: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // Get current user from Supabase session
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        throw new Error('No active session. Please sign in again.');
+      // Get current user
+      const userStr = localStorage.getItem('neuromatch_user');
+      if (!userStr) {
+        throw new Error('No user found. Please sign up first.');
       }
+      
+      const user = JSON.parse(userStr);
       
       // Convert answers map to array
       const answersArray = Array.from(answers.values());
       
       // Submit quiz
-      await api.submitQuiz(session.user.id, answersArray);
+      await api.submitQuiz(user.id, answersArray);
       
       toast({
         title: "Quiz completed!",

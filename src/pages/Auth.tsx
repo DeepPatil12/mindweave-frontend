@@ -21,44 +21,35 @@ const Auth: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    // Check ONCE on mount if user is already logged in
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
+    // Check if user is already logged in
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Check if user has completed signup
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
         
-        if (session) {
-          // Check if user has profile
-          const { data: profile } = await (supabase as any)
-            .from('profiles')
-            .select('username')
-            .eq('id', session.user.id)
-            .maybeSingle();
-          
-          if (profile) {
-            navigate('/profile', { replace: true });
-          } else {
-            navigate('/signup', { replace: true });
-          }
-          return;
+        if (profile) {
+          navigate('/profile');
+        } else {
+          navigate('/signup');
         }
-      } catch (error) {
-        console.error('Auth check failed:', error);
-      } finally {
-        setIsCheckingAuth(false);
       }
     };
-    
-    checkAuth();
-  }, []); // Empty deps - run ONCE
+    checkUser();
+  }, [navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate input
     const result = authSchema.safeParse({ email: email.trim(), password });
     if (!result.success) {
       toast({
@@ -73,7 +64,6 @@ const Auth: React.FC = () => {
 
     try {
       if (isLogin) {
-        // LOGIN
         const { data, error } = await supabase.auth.signInWithPassword({
           email: result.data.email,
           password: result.data.password
@@ -81,12 +71,12 @@ const Auth: React.FC = () => {
 
         if (error) throw error;
 
-        // Check if profile exists
-        const { data: profile } = await (supabase as any)
+        // Check if user has completed profile
+        const { data: profile } = await supabase
           .from('profiles')
-          .select('username')
+          .select('*')
           .eq('id', data.user.id)
-          .maybeSingle();
+          .single();
 
         toast({
           title: "Welcome back!",
@@ -94,17 +84,18 @@ const Auth: React.FC = () => {
         });
 
         if (profile) {
-          navigate('/profile', { replace: true });
+          navigate('/profile');
         } else {
-          navigate('/signup', { replace: true });
+          navigate('/signup');
         }
       } else {
-        // SIGNUP
+        const redirectUrl = `${window.location.origin}/signup`;
+        
         const { error } = await supabase.auth.signUp({
           email: result.data.email,
           password: result.data.password,
           options: {
-            emailRedirectTo: `${window.location.origin}/signup`
+            emailRedirectTo: redirectUrl
           }
         });
 
@@ -112,10 +103,8 @@ const Auth: React.FC = () => {
 
         toast({
           title: "Check your email",
-          description: "We sent you a confirmation link."
+          description: "We sent you a confirmation link. Please check your email to continue."
         });
-        
-        setIsLoading(false);
       }
     } catch (error: any) {
       console.error('Auth error:', error);
@@ -124,22 +113,10 @@ const Auth: React.FC = () => {
         title: isLogin ? "Login failed" : "Signup failed",
         description: error.message || "Please try again."
       });
+    } finally {
       setIsLoading(false);
     }
   };
-
-  if (isCheckingAuth) {
-    return (
-      <Layout showNav={false}>
-        <div className="max-w-md mx-auto py-16 text-center">
-          <div className="animate-pulse">
-            <div className="h-8 bg-muted rounded w-48 mx-auto mb-4"></div>
-            <div className="h-4 bg-muted rounded w-64 mx-auto"></div>
-          </div>
-        </div>
-      </Layout>
-    );
-  }
 
   return (
     <Layout showNav={false}>

@@ -18,26 +18,20 @@ const Processing: React.FC = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    let isMounted = true;
-    let timeouts: NodeJS.Timeout[] = [];
+    let progressTimer: NodeJS.Timeout;
+    let stepTimer: NodeJS.Timeout;
+    let totalTime = 0;
 
     const runProcessing = async () => {
       // Simulate processing steps
       for (let i = 0; i < processingSteps.length; i++) {
-        if (!isMounted) return;
-        
         setCurrentStep(i);
         
         const stepDuration = processingSteps[i].duration;
-        const stepStartTime = Date.now();
+        const stepStartTime = totalTime;
         
         // Animate progress for this step
         const stepProgressTimer = setInterval(() => {
-          if (!isMounted) {
-            clearInterval(stepProgressTimer);
-            return;
-          }
-          
           const elapsed = Date.now() - stepStartTime;
           const stepProgress = Math.min(elapsed / stepDuration, 1);
           const overallProgress = ((i + stepProgress) / processingSteps.length) * 100;
@@ -51,33 +45,31 @@ const Processing: React.FC = () => {
 
         // Wait for step to complete
         await new Promise(resolve => {
-          const timeout = setTimeout(() => {
+          setTimeout(() => {
             clearInterval(stepProgressTimer);
             resolve(void 0);
           }, stepDuration);
-          timeouts.push(timeout);
         });
+        
+        totalTime += stepDuration;
       }
-
-      if (!isMounted) return;
 
       // Complete processing
       setProgress(100);
       
       // Navigate to profile after a brief pause
-      const finalTimeout = setTimeout(() => {
-        if (isMounted) navigate('/profile', { replace: true });
+      setTimeout(() => {
+        navigate('/profile');
       }, 800);
-      timeouts.push(finalTimeout);
     };
 
     runProcessing();
 
     return () => {
-      isMounted = false;
-      timeouts.forEach(clearTimeout);
+      if (progressTimer) clearTimeout(progressTimer);
+      if (stepTimer) clearTimeout(stepTimer);
     };
-  }, []);
+  }, [navigate]);
 
   const CurrentIcon = processingSteps[currentStep]?.icon || Brain;
 

@@ -135,25 +135,26 @@ initializeMockData();
 export const api = {
   // Authentication & Signup (handled by Supabase Auth directly)
   async signup(data: { username: string; avatarId: string }): Promise<User> {
+    // This is now handled in the Signup page directly with Supabase
+    // Keeping this for API compatibility
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) throw new Error('Not authenticated');
     
-    const { data: profile, error } = await (supabase as any)
+    const { data: profile, error } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', authUser.id)
       .single();
     
     if (error) throw error;
-    if (!profile) throw new Error('Profile not found');
     
     return {
-      id: profile.id as string,
-      username: (profile.username as string) || '',
-      avatarId: (profile.avatar_id as string) || '',
-      bio: profile.bio as string | undefined,
-      age: profile.age as number | undefined,
-      gender: profile.gender as string | undefined
+      id: profile.id,
+      username: profile.username,
+      avatarId: profile.avatar_id,
+      bio: profile.bio,
+      age: profile.age,
+      gender: profile.gender
     };
   },
 
@@ -180,7 +181,7 @@ export const api = {
   },
 
   async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
-    const { error } = await (supabase as any)
+    const { error } = await supabase
       .from('profiles')
       .update({
         username: updates.username,
@@ -192,9 +193,7 @@ export const api = {
     
     if (error) throw error;
     
-    const profile = await this.getProfile(userId);
-    if (!profile) throw new Error('Profile not found');
-    return profile;
+    return this.getProfile(userId) as Promise<User>;
   },
 
   // Matches
