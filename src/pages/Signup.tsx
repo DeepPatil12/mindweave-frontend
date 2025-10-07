@@ -7,11 +7,14 @@ import { Card } from '@/components/ui/card';
 import { AvatarGrid } from '@/components/Avatar';
 import { Layout } from '@/components/Layout';
 import { useToast } from '@/hooks/use-toast';
-import { api, mockData } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
+import { mockData } from '@/lib/api';
 import { RefreshCw, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const Signup: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [selectedAvatarId, setSelectedAvatarId] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,13 +22,25 @@ const Signup: React.FC = () => {
   const { toast } = useToast();
 
   const handleGenerateUsername = () => {
-    const generated = api.generateUsername();
+    const adjectives = ['Deep', 'Cosmic', 'Quiet', 'Brilliant', 'Gentle', 'Wild', 'Ancient', 'Serene'];
+    const nouns = ['Thinker', 'Wanderer', 'Storm', 'River', 'Mountain', 'Ocean', 'Forest', 'Star'];
+    const num = Math.floor(Math.random() * 99) + 1;
+    const generated = `${adjectives[Math.floor(Math.random() * adjectives.length)]}${nouns[Math.floor(Math.random() * nouns.length)]}${num}`;
     setUsername(generated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!email.trim() || !password.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Email and password required",
+        description: "Please fill in all fields."
+      });
+      return;
+    }
+
     if (!username.trim()) {
       toast({
         variant: "destructive",
@@ -47,18 +62,39 @@ const Signup: React.FC = () => {
     setIsLoading(true);
 
     try {
-      const user = await api.signup({
-        username: username.trim(),
-        avatarId: selectedAvatarId
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password: password.trim(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            username: username.trim(),
+            avatar_id: selectedAvatarId
+          }
+        }
       });
 
-      toast({
-        title: "Welcome to NeuroMatch!",
-        description: `Your pseudonym ${user.username} has been created.`
-      });
+      if (authError) throw authError;
 
-      // Navigate to quiz
-      navigate('/quiz');
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            username: username.trim(),
+            avatar_id: selectedAvatarId,
+            email: email.trim()
+          });
+
+        if (profileError) throw profileError;
+
+        toast({
+          title: "Welcome to NeuroMatch!",
+          description: `Your pseudonym ${username} has been created.`
+        });
+
+        navigate('/quiz');
+      }
     } catch (error) {
       toast({
         variant: "destructive",
@@ -106,6 +142,38 @@ const Signup: React.FC = () => {
         >
           <Card className="card-elevated p-8">
             <form onSubmit={handleSubmit} className="space-y-8">
+              {/* Email Section */}
+              <div className="space-y-4">
+                <Label htmlFor="email" className="text-lg font-semibold">
+                  Email Address
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="shadow-soft"
+                  disabled={isLoading}
+                />
+              </div>
+
+              {/* Password Section */}
+              <div className="space-y-4">
+                <Label htmlFor="password" className="text-lg font-semibold">
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Choose a secure password"
+                  className="shadow-soft"
+                  disabled={isLoading}
+                />
+              </div>
+
               {/* Username Section */}
               <div className="space-y-4">
                 <Label htmlFor="username" className="text-lg font-semibold">
@@ -168,7 +236,7 @@ const Signup: React.FC = () => {
                   variant="hero"
                   size="lg"
                   className="w-full"
-                  disabled={isLoading || !username.trim() || !selectedAvatarId}
+                  disabled={isLoading || !email.trim() || !password.trim() || !username.trim() || !selectedAvatarId}
                 >
                   {isLoading ? 'Creating Profile...' : 'Create My Profile'}
                 </Button>
