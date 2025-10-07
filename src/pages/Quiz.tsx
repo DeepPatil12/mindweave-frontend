@@ -6,6 +6,7 @@ import { QuizQuestionComponent, QuizProgress } from '@/components/QuizQuestion';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { api, type QuizQuestion, type QuizAnswer } from '@/lib/api';
+import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft, ArrowRight, SkipForward, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -19,10 +20,22 @@ const Quiz: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Load quiz questions
+  // Check authentication and load quiz questions
   useEffect(() => {
-    const loadQuestions = async () => {
+    const checkAuthAndLoadQuestions = async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (!session) {
+          toast({
+            variant: "destructive",
+            title: "Authentication required",
+            description: "Please sign up first to take the quiz."
+          });
+          navigate('/signup');
+          return;
+        }
+
         const quizQuestions = await api.getQuizQuestions();
         setQuestions(quizQuestions);
       } catch (error) {
@@ -36,8 +49,8 @@ const Quiz: React.FC = () => {
       }
     };
 
-    loadQuestions();
-  }, [toast]);
+    checkAuthAndLoadQuestions();
+  }, [toast, navigate]);
 
   const currentQuestion = questions[currentIndex];
   const currentAnswer = currentQuestion ? answers.get(currentQuestion.id) : undefined;
@@ -75,19 +88,18 @@ const Quiz: React.FC = () => {
     setIsSubmitting(true);
     
     try {
-      // Get current user
-      const userStr = localStorage.getItem('neuromatch_user');
-      if (!userStr) {
+      // Get current user from Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.user) {
         throw new Error('No user found. Please sign up first.');
       }
-      
-      const user = JSON.parse(userStr);
       
       // Convert answers map to array
       const answersArray = Array.from(answers.values());
       
       // Submit quiz
-      await api.submitQuiz(user.id, answersArray);
+      await api.submitQuiz(session.user.id, answersArray);
       
       toast({
         title: "Quiz completed!",

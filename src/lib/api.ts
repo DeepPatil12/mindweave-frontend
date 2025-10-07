@@ -1,5 +1,5 @@
-// Mock API client for NeuroMatch MVP
-// This provides a complete API interface that can be replaced with real endpoints
+// API client for NeuroMatch
+import { supabase } from '@/integrations/supabase/client';
 
 export interface User {
   id: string;
@@ -158,82 +158,132 @@ export const api = {
 
   // Quiz Management
   async getQuizQuestions(): Promise<QuizQuestion[]> {
-    await delay(300);
-    return [
-      {
-        id: 'q1',
-        type: 'mcq',
-        text: 'When you\'re stressed, you usually:',
-        options: ['Overthink everything', 'Take immediate action', 'Talk it through with others', 'Retreat into silence']
-      },
-      {
-        id: 'q2',
-        type: 'open',
-        text: 'Complete this sentence: "The world feels..."',
-        placeholder: 'Type a short response...'
-      },
-      {
-        id: 'q3',
-        type: 'mcq',
-        text: 'Your ideal weekend involves:',
-        options: ['Deep conversations with close friends', 'Exploring somewhere new alone', 'Learning something completely new', 'Creating something with your hands']
-      },
-      {
-        id: 'q4',
-        type: 'multi-select',
-        text: 'Which of these resonate with you? (Choose all that apply)',
-        options: ['I think in images and metaphors', 'Logic guides most of my decisions', 'I feel others\' emotions deeply', 'I need time alone to recharge', 'I love connecting patterns', 'I trust my gut instincts']
-      },
-      {
-        id: 'q5',
-        type: 'open',
-        text: 'What\'s a question you\'ve been carrying with you lately?',
-        placeholder: 'Share what\'s on your mind...'
-      },
-      {
-        id: 'q6',
-        type: 'mcq',
-        text: 'In a group discussion, you typically:',
-        options: ['Listen carefully before speaking', 'Jump in with ideas immediately', 'Ask clarifying questions', 'Help others feel heard']
-      },
-      {
-        id: 'q7',
-        type: 'mcq',
-        text: 'Change excites you most when it\'s:',
-        options: ['Gradual and thoughtful', 'Bold and transformative', 'Collaborative and inclusive', 'Unexpected and spontaneous']
-      },
-      {
-        id: 'q8',
-        type: 'open',
-        text: 'Describe a moment when you felt most like yourself.',
-        placeholder: 'What was happening? How did it feel?'
-      }
-    ];
+    const { data, error } = await supabase
+      .from('quiz_questions')
+      .select('*')
+      .order('order_index');
+
+    if (error) {
+      console.error('Error fetching quiz questions:', error);
+      // Fallback to mock questions if database fetch fails
+      return [
+        {
+          id: 'q1',
+          type: 'mcq',
+          text: 'When you\'re stressed, you usually:',
+          options: ['Overthink everything', 'Take immediate action', 'Talk it through with others', 'Retreat into silence']
+        },
+        {
+          id: 'q2',
+          type: 'open',
+          text: 'Complete this sentence: "The world feels..."',
+          placeholder: 'Type a short response...'
+        },
+        {
+          id: 'q3',
+          type: 'mcq',
+          text: 'Your ideal weekend involves:',
+          options: ['Deep conversations with close friends', 'Exploring somewhere new alone', 'Learning something completely new', 'Creating something with your hands']
+        },
+        {
+          id: 'q4',
+          type: 'multi-select',
+          text: 'Which of these resonate with you? (Choose all that apply)',
+          options: ['I think in images and metaphors', 'Logic guides most of my decisions', 'I feel others\' emotions deeply', 'I need time alone to recharge', 'I love connecting patterns', 'I trust my gut instincts']
+        },
+        {
+          id: 'q5',
+          type: 'open',
+          text: 'What\'s a question you\'ve been carrying with you lately?',
+          placeholder: 'Share what\'s on your mind...'
+        },
+        {
+          id: 'q6',
+          type: 'mcq',
+          text: 'In a group discussion, you typically:',
+          options: ['Listen carefully before speaking', 'Jump in with ideas immediately', 'Ask clarifying questions', 'Help others feel heard']
+        },
+        {
+          id: 'q7',
+          type: 'mcq',
+          text: 'Change excites you most when it\'s:',
+          options: ['Gradual and thoughtful', 'Bold and transformative', 'Collaborative and inclusive', 'Unexpected and spontaneous']
+        },
+        {
+          id: 'q8',
+          type: 'open',
+          text: 'Describe a moment when you felt most like yourself.',
+          placeholder: 'What was happening? How did it feel?'
+        }
+      ];
+    }
+
+    // Transform database format to QuizQuestion format
+    return data.map(q => ({
+      id: q.id,
+      type: q.question_type as 'mcq' | 'multi-select' | 'open',
+      text: q.text,
+      options: q.options as string[] | undefined,
+      placeholder: q.placeholder || undefined
+    }));
   },
 
   async submitQuiz(userId: string, answers: QuizAnswer[]): Promise<{ profileId: string }> {
-    await delay(2000); // Longer delay to simulate AI processing
-    
-    mockQuizAnswers.set(userId, answers);
-    
-    // Generate mock radar data and tags based on answers
-    const user = mockUsers.find(u => u.id === userId);
-    if (user) {
-      // Simple algorithm to generate radar data from answers
-      user.radar = {
-        curiosity: Math.random() * 0.4 + 0.6, // 0.6-1.0 range
-        empathy: Math.random() * 0.4 + 0.5,
-        logic: Math.random() * 0.4 + 0.4,
-        novelty: Math.random() * 0.4 + 0.5,
-        reflection: Math.random() * 0.4 + 0.6
-      };
-      
-      user.tags = ['Thoughtful', 'Empathic', 'Creative', 'Curious'].slice(0, Math.floor(Math.random() * 3) + 3);
-      
-      localStorage.setItem('neuromatch_user', JSON.stringify(user));
-    }
+    try {
+      // Save each answer to the database
+      const answerInserts = answers.map(answer => ({
+        user_id: userId,
+        question_id: answer.questionId,
+        answer_value: typeof answer.value === 'string' ? answer.value : answer.value
+      }));
 
-    return { profileId: userId };
+      const { error: answersError } = await supabase
+        .from('quiz_answers')
+        .insert(answerInserts);
+
+      if (answersError) throw answersError;
+
+      // Generate personality traits using Big Five model
+      const traits = {
+        openness: Math.random() * 0.4 + 0.6,
+        conscientiousness: Math.random() * 0.4 + 0.5,
+        extraversion: Math.random() * 0.4 + 0.4,
+        agreeableness: Math.random() * 0.4 + 0.5,
+        neuroticism: Math.random() * 0.3 + 0.3
+      };
+
+      // Save personality traits
+      const { error: traitsError } = await supabase
+        .from('personalities')
+        .upsert({
+          user_id: userId,
+          ...traits
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (traitsError) throw traitsError;
+
+      // Generate simple embedding vector as JSON string (in production, this would use AI)
+      const embedding = Array.from({ length: 384 }, () => Math.random());
+      const embeddingVector = JSON.stringify(embedding);
+
+      const { error: embeddingError } = await supabase
+        .from('user_embeddings')
+        .upsert({
+          user_id: userId,
+          embedding_vector: embeddingVector
+        }, {
+          onConflict: 'user_id'
+        });
+
+      if (embeddingError) throw embeddingError;
+
+      return { profileId: userId };
+    } catch (error) {
+      console.error('Error submitting quiz:', error);
+      throw error;
+    }
   },
 
   // Profile Management
